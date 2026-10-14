@@ -6,8 +6,10 @@
   <meta name="theme-color" content="#4f46e5" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>UjianPDF Mobile</title>
+  <title>UjianPDF Mobile Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mesin Pembaca PDF Ukuran Besar (PDF.js) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-16 select-none">
 
@@ -15,7 +17,7 @@
   <header class="sticky top-0 z-20 bg-indigo-600 shadow-lg px-4 py-3.5 flex items-center justify-between">
     <div class="flex items-center gap-2" onclick="showHome()">
       <span class="text-xl">📱</span>
-      <h1 class="font-bold text-base tracking-tight">UjianPDF Kuliah</h1>
+      <h1 class="font-bold text-base tracking-tight">UjianPDF Kuliah Pro</h1>
     </div>
     <div class="flex items-center gap-2">
       <button onclick="toggleApiModal()" class="text-xs bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-lg font-medium">
@@ -33,7 +35,7 @@
     <section id="apiModal" class="hidden bg-slate-800 border-2 border-indigo-500 rounded-2xl p-4 shadow-2xl">
       <h2 class="text-sm font-bold mb-1">🔑 Pengaturan Gemini API Key</h2>
       <p class="text-xs text-slate-400 mb-3">
-        API Key disimpan aman di memori internal browser HP kamu. Ambil gratis di <a href="https://aistudio.google.com/apikey" target="_blank" class="text-indigo-400 underline">aistudio.google.com/apikey</a>.
+        API Key disimpan di memori browser HP kamu. Ambil gratis di <a href="https://aistudio.google.com/apikey" target="_blank" class="text-indigo-400 underline">aistudio.google.com/apikey</a>.
       </p>
       <input
         type="password"
@@ -54,19 +56,47 @@
     <!-- PANEL 1: FORM UPLOAD PDF & BANK SOAL -->
     <div id="homeSection" class="space-y-4">
       <section class="bg-slate-800 rounded-2xl p-5 shadow-xl border border-slate-700">
-        <h2 class="text-base font-semibold mb-1">Buat Ujian dari PDF Kuliah</h2>
-        <p class="text-xs text-slate-400 mb-4">Pilih file PDF materi dari penyimpanan HP kamu.</p>
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-base font-semibold">Buat Ujian dari PDF Kuliah</h2>
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">Up to 200 MB+</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">Mendukung e-book tebal, modul ratusan halaman, maupun slide dosen.</p>
 
         <form id="quizForm" class="space-y-4">
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">File PDF Materi (Maks. 15 MB)</label>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Pilih File PDF Materi (Bebas Ukuran)</label>
             <input
               type="file"
               id="pdfFile"
               accept="application/pdf"
               required
+              onchange="inspectPdfFile(this)"
               class="block w-full text-xs text-slate-300 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white bg-slate-900 rounded-xl border border-slate-700 p-1.5"
             />
+            <p id="pdfInfoText" class="hidden text-[11px] text-indigo-400 mt-1.5 font-medium"></p>
+          </div>
+
+          <!-- RENTANG HALAMAN (OPSIONAL UNTUK BUKU TEBAL) -->
+          <div class="bg-slate-900/70 border border-slate-700/80 rounded-xl p-3">
+            <label class="block text-xs font-medium text-slate-300 mb-1">
+              Rentang Halaman <span class="text-slate-500 font-normal">(Opsional - Kosongkan jika semua)</span>
+            </label>
+            <div class="grid grid-cols-2 gap-2.5">
+              <input
+                type="number"
+                id="startPage"
+                min="1"
+                placeholder="Dari hal (mis: 1)"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+              />
+              <input
+                type="number"
+                id="endPage"
+                min="1"
+                placeholder="Sampai hal (mis: 30)"
+                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+              />
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
@@ -77,6 +107,7 @@
                 <option value="10" selected>10 Soal</option>
                 <option value="15">15 Soal</option>
                 <option value="20">20 Soal</option>
+                <option value="30">30 Soal</option>
               </select>
             </div>
             <div>
@@ -113,8 +144,8 @@
     <!-- PANEL 2: LOADING -->
     <section id="loadingSection" class="hidden bg-slate-800 rounded-2xl p-8 text-center border border-slate-700 my-6">
       <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-      <h3 class="font-semibold text-base mb-1">AI Sedang Membaca PDF...</h3>
-      <p class="text-xs text-slate-400">Tunggu sekitar 10–25 detik. Jangan tutup layar HP.</p>
+      <h3 id="loadingStatus" class="font-semibold text-base mb-1">Membaca File PDF...</h3>
+      <p id="loadingSubStatus" class="text-xs text-slate-400">Mohon tunggu sebentar, jangan tutup layar HP.</p>
     </section>
 
     <!-- PANEL 3: AREA UJIAN -->
@@ -145,12 +176,14 @@
   </main>
 
   <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
     let currentQuestions = [];
     let currentTitle = "";
     let answeredCount = 0;
     let correctCount = 0;
+    let loadedPdfDoc = null;
 
-    // Cek API Key saat pertama kali buka di HP
     window.addEventListener("DOMContentLoaded", () => {
       const savedKey = localStorage.getItem("gemini_api_key");
       if (savedKey) {
@@ -173,17 +206,92 @@
       alert("✅ API Key tersimpan di HP!");
     }
 
-    // Ubah file PDF di HP menjadi Base64
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result.split(",")[1];
-          resolve(base64);
+    // Deteksi jumlah halaman & ukuran saat file dipilih
+    async function inspectPdfFile(input) {
+      const file = input.files[0];
+      const infoEl = document.getElementById("pdfInfoText");
+      if (!file) {
+        infoEl.classList.add("hidden");
+        return;
+      }
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      infoEl.textContent = `⏳ Memeriksa halaman PDF (${sizeMB} MB)...`;
+      infoEl.classList.remove("hidden");
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        loadedPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        infoEl.textContent = `✅ Siap diproses: ${loadedPdfDoc.numPages} Halaman (${sizeMB} MB)`;
+        document.getElementById("endPage").placeholder = `Sampai hal (maks: ${loadedPdfDoc.numPages})`;
+      } catch (e) {
+        infoEl.textContent = `📄 Ukuran file: ${sizeMB} MB`;
+      }
+    }
+
+    // Ekstrak isi PDF ukuran besar langsung di HP
+    async function extractPdfContent(file, startPageInput, endPageInput) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+
+      let start = parseInt(startPageInput) || 1;
+      let end = parseInt(endPageInput) || totalPages;
+      if (start < 1) start = 1;
+      if (end > totalPages) end = totalPages;
+      if (start > end) [start, end] = [end, start];
+
+      // Jika buku ratusan halaman dan user tidak membatasi halaman, ambil maksimal 120 halaman agar respons cepat
+      const maxPagesToRead = 120;
+      if (end - start + 1 > maxPagesToRead) {
+        end = start + maxPagesToRead - 1;
+      }
+
+      let extractedText = "";
+      for (let pageNum = start; pageNum <= end; pageNum++) {
+        document.getElementById("loadingStatus").textContent = `Membaca Halaman ${pageNum} dari ${end}...`;
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item) => item.str).join(" ");
+        if (pageText.trim()) {
+          extractedText += `\n--- [Halaman ${pageNum}] ---\n` + pageText;
+        }
+      }
+
+      // Jika PDF memiliki teks (E-book / Slide normal)
+      if (extractedText.trim().length > 150) {
+        return {
+          mode: "text",
+          data: extractedText.slice(0, 180000),
+          rangeInfo: `Hal ${start}-${end}`,
         };
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(file);
-      });
+      }
+
+      // Jika PDF adalah hasil scan foto tanpa teks, ubah halaman menjadi gambar ringan
+      const imageParts = [];
+      const maxScanPages = Math.min(end, start + 11); // Maks 12 halaman untuk mode scan foto
+      for (let pageNum = start; pageNum <= maxScanPages; pageNum++) {
+        document.getElementById("loadingStatus").textContent = `Memindai Gambar Halaman ${pageNum}...`;
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.2 });
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const base64Jpg = canvas.toDataURL("image/jpeg", 0.65).split(",")[1];
+        imageParts.push({
+          inline_data: {
+            mime_type: "image/jpeg",
+            data: base64Jpg,
+          },
+        });
+      }
+
+      return {
+        mode: "images",
+        data: imageParts,
+        rangeInfo: `Hal ${start}-${maxScanPages}`,
+      };
     }
 
     document.getElementById("quizForm").addEventListener("submit", async (e) => {
@@ -196,20 +304,28 @@
 
       const file = document.getElementById("pdfFile").files[0];
       if (!file) return;
-      if (file.size > 15 * 1024 * 1024) {
-        return alert("Ukuran PDF maksimal 15 MB agar browser HP tidak berat.");
-      }
 
       const numQuestions = document.getElementById("numQuestions").value;
       const difficulty = document.getElementById("difficulty").value;
+      const startPage = document.getElementById("startPage").value;
+      const endPage = document.getElementById("endPage").value;
 
       document.getElementById("homeSection").classList.add("hidden");
       document.getElementById("loadingSection").classList.remove("hidden");
 
       try {
-        const base64Pdf = await fileToBase64(file);
+        const extracted = await extractPdfContent(file, startPage, endPage);
+        document.getElementById("loadingStatus").textContent = "AI Sedang Merancang Soal Ujian...";
+        document.getElementById("loadingSubStatus").textContent = "Menyusun pertanyaan dan pembahasan dari materi...";
 
-        const promptText = `Kamu adalah dosen penguji ahli. Baca seluruh materi dalam dokumen PDF mata kuliah ini. Buatlah tepat ${numQuestions} soal pilihan ganda dalam Bahasa Indonesia dengan tingkat kesulitan ${difficulty}. Setiap soal wajib memiliki 4 opsi jawaban (tanpa huruf A/B/C/D di depannya), indeks jawaban benar (0 sampai 3), dan pembahasan lengkap berdasarkan isi PDF.`;
+        const basePrompt = `Kamu adalah dosen penguji ahli. Berdasarkan materi kuliah berikut ini, buatlah tepat ${numQuestions} soal pilihan ganda dalam Bahasa Indonesia dengan tingkat kesulitan ${difficulty}. Setiap soal wajib memiliki 4 opsi jawaban (tanpa huruf A/B/C/D di depannya), indeks jawaban benar (0 sampai 3), dan pembahasan lengkap berdasarkan materi tersebut.`;
+
+        let requestParts = [];
+        if (extracted.mode === "text") {
+          requestParts = [{ text: basePrompt + "\n\nISI MATERI KULIAH:\n" + extracted.data }];
+        } else {
+          requestParts = [...extracted.data, { text: basePrompt }];
+        }
 
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -217,19 +333,7 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      inline_data: {
-                        mime_type: "application/pdf",
-                        data: base64Pdf,
-                      },
-                    },
-                    { text: promptText },
-                  ],
-                },
-              ],
+              contents: [{ parts: requestParts }],
               generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -252,12 +356,12 @@
 
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.error?.message || "Gagal memproses PDF ke Gemini API.");
+          throw new Error(result.error?.message || "Gagal menghubungi Gemini API.");
         }
 
         const rawJson = result.candidates[0].content.parts[0].text;
         currentQuestions = JSON.parse(rawJson);
-        currentTitle = file.name.replace(".pdf", "");
+        currentTitle = `${file.name.replace(".pdf", "")} (${extracted.rangeInfo})`;
 
         saveToHistory(currentTitle, currentQuestions);
         renderQuiz();
